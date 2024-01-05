@@ -3,19 +3,21 @@
    
 🧪 개요
 ---
-> 진행한 실험 프로젝트 중 대표적인 실험만 아카이빙한 repository입니다.
+> - 진행한 실험 프로젝트 중 대표적인 실험만 아카이빙한 repository입니다.<br/>
+> - 코드 위주의 보고서만 있습니다.<br/>
+> - 전체적인 배경과 설명은 [여기](https://analystlim.oopy.io/82af270f-7e45-4543-b387-889d0f3cb66d)를 참조해주세요.<br/>
 <br/>
 
-🧑🏻 소유자
+🧑🏻 프로필
 ---
-> 임승빈
-> Travelmakers.Inc Product Analyst   
-> Contact: tmdqls2247@naver.com
+> - 임승빈 <br/>
+> - Travelmakers.Inc Product Analyst   
+> - Contact: tmdqls2247@naver.com <br/>
+> - Porfolio: [analystlim.oopy.io](analystlim.oopy.io) 
 <br/>
 
 📃 규칙
 ---
-- 규칙
 ```
 1. 검정 방법의 선택
    a. 빈도주의(Frequentism)
