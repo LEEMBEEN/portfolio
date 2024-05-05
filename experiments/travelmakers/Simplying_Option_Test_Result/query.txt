@@ -1,0 +1,121 @@
+-- 본 쿼리는 재사용 전에 _TABLE_SUFFIX의 기간을 23/11/22 이하로 조건을 추가해야만 합니다.
+
+
+
+WITH
+-- experiment_viewed 이벤트 전체 불러오기
+__experiment_viewed_event AS
+(
+  SELECT
+    user_pseudo_id,
+    TIMESTAMP_MICROS(event_timestamp) AS experiment_viewed_at,
+    event_name,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'experiment_id') AS experiment_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'variation_id') AS variation_id,
+    (SELECT value.string_value FROM UNNEST(user_properties) WHERE key = 'isAdmin') AS is_admin
+  FROM `livinginhotel-334006.analytics_343047555.events_*`
+  WHERE 
+    event_name = 'experiment_viewed'
+    AND (_TABLE_SUFFIX >= '20231101')
+),
+
+-- 결제페이지 방문 이벤트 전체
+__view_payment AS
+(
+  SELECT
+    user_pseudo_id,
+    event_name,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location') AS page_location
+  FROM `livinginhotel-334006.analytics_343047555.events_*`
+  WHERE 
+    event_name = 'view_payment'
+    AND (_TABLE_SUFFIX >= '20231101')
+    AND platform = 'WEB'
+),
+
+/*
+이상치 판단 여부
+1. variation을 2가지 모두 사용한 경우
+2. isAdim = True인 경우
+3. /hotel/356/options 접속한 경우 (브리드 양양의 경우 실험 제외했기 때문에)
+*/
+
+-- variation을 2가지 모두 사용한 경우
+__delete_outlier_double1 AS
+(
+  SELECT
+    DISTINCT user_pseudo_id,
+    variation_id
+  FROM __experiment_viewed_event
+),
+
+__delete_outlier_double2 AS
+(
+  SELECT
+    COUNT(*),
+    user_pseudo_id
+  FROM __delete_outlier_double1
+  GROUP BY user_pseudo_id
+  HAVING COUNT(*) >= 2
+),
+
+__delete_outlier_double AS
+(
+  SELECT DISTINCT user_pseudo_id 
+  FROM __delete_outlier_double2
+),
+
+-- isAdim = True인 경우
+__delete_outlier_admin AS
+(
+  SELECT DISTINCT user_pseudo_id 
+  FROM __experiment_viewed_event 
+  WHERE is_admin = 'true'
+),
+
+-- /hotel/356/options 접속한 경우 (브리드 양양의 경우 실험 제외했기 때문에)
+__delete_outlier_yangyang AS
+(
+  SELECT DISTINCT user_pseudo_id
+  FROM __view_payment
+  WHERE page_location LIKE '%/hotel/356/options%'
+),
+
+__delete_outlier_result AS
+(
+  SELECT * FROM __delete_outlier_double
+  UNION ALL
+  SELECT * FROM __delete_outlier_admin
+  UNION ALL
+  SELECT * FROM __delete_outlier_yangyang
+),
+
+-- 전체 experiment_viewed 이벤트 발생자 중 이상치 발생 유저는 삭제
+__experiment_viewed_event_except_outlier AS
+(
+  SELECT
+    DISTINCT user_pseudo_id,
+    variation_id
+  FROM __experiment_viewed_event
+  WHERE 
+    __experiment_viewed_event.user_pseudo_id NOT IN (SELECT user_pseudo_id FROM __delete_outlier_result)
+),
+
+-- 전환 여부 측정
+__check_is_converted AS
+(
+  SELECT
+    (CASE
+      WHEN variation_id = 0 THEN 'control'
+      WHEN variation_id = 1 THEN 'variation'
+    END) AS variation,
+    (CASE 
+      WHEN user_pseudo_id IN (SELECT user_pseudo_id FROM __view_payment) THEN 'converted'
+      ELSE 'not_converted'
+    END) AS is_converted
+  FROM __experiment_viewed_event_except_outlier
+)
+
+SELECT * 
+FROM __check_is_converted
+PIVOT (COUNT(is_converted) FOR is_converted IN ('converted', 'not_converted'))
